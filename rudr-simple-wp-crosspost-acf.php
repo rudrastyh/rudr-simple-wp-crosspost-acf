@@ -220,7 +220,7 @@ class Rudr_SWC_ACF {
 
 		// loop through the blocks
 		foreach( $blocks as &$block ) {
-			$block = $this->process_acf_block( $block, $data, $blog );
+			$block = $this->process_acf_block( $block, $blog );
 		}
 
 		//file_put_contents( __DIR__ . '/log.txt' , print_r( $blocks, true ) );
@@ -237,12 +237,29 @@ class Rudr_SWC_ACF {
 		return $data;
 	}
 
-	public function process_acf_block( $block, $data, $blog ) {
+	public function process_acf_block_by_type( $meta_value, $field, $blog ) {
+		switch( $field[ 'type' ] ) {
+			case 'image':
+			case 'gallery':
+			case 'file': {
+				$meta_value = $this->process_attachment_field( $meta_value, $field, $blog );
+				break;
+			}
+			case 'relationship':
+			case 'post_object': {
+				$meta_value = $this->process_relationships_field( $meta_value, $field, $blog );
+				break;
+			}
+		}
+		return $meta_value;
+	}
+
+	public function process_acf_block( $block, $blog ) {
 
 		// first – process inner blocks
 		if( $block[ 'innerBlocks' ] ) {
 			foreach( $block[ 'innerBlocks' ] as &$innerBlock ) {
-				$innerBlock = $this->process_acf_block( $innerBlock, $data, $blog );
+				$innerBlock = $this->process_acf_block( $innerBlock, $blog );
 			}
 		}
 
@@ -265,7 +282,7 @@ class Rudr_SWC_ACF {
 
 				$value = apply_filters(
 					'rudr_swc_pre_crosspost_acf_block_value',
-					$this->process_field_by_type( $value, get_field_object( $field_key, $data[ 'id' ], false ), $data[ 'id' ], $blog ),
+					$this->process_acf_block_by_type( $value, acf_get_field( $field_key ), $blog ),
 					$field_key,
 					$blog
 				);
