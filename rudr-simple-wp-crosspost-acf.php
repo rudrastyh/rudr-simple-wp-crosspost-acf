@@ -1,11 +1,11 @@
 <?php
 /**
  * Plugin Name: Simple WP Crossposting – ACF
- * Plugin URL: https://rudrastyh.com/support/acf
+ * Plugin URL: https://rudrastyh.com/support/acf-compatibility
  * Description: Provides better compatibility with ACF and ACF PRO.
  * Author: Misha Rudrastyh
  * Author URI: https://rudrastyh.com
- * Version: 1.0
+ * Version: 1.1
  */
 class Rudr_SWC_ACF {
 
@@ -218,9 +218,9 @@ class Rudr_SWC_ACF {
 		$blocks = parse_blocks( $data[ 'content' ] );
 		//file_put_contents( __DIR__ . '/log.txt' , print_r( $blocks, true ) );
 
-		// let's do the shit
+		// loop through the blocks
 		foreach( $blocks as &$block ) {
-			$block = $this->process_acf_block( $block, $blog );
+			$block = $this->process_acf_block( $block, $data, $blog );
 		}
 
 		//file_put_contents( __DIR__ . '/log.txt' , print_r( $blocks, true ) );
@@ -237,12 +237,12 @@ class Rudr_SWC_ACF {
 		return $data;
 	}
 
-	public function process_acf_block( $block, $blog ) {
+	public function process_acf_block( $block, $data, $blog ) {
 
 		// first – process inner blocks
 		if( $block[ 'innerBlocks' ] ) {
 			foreach( $block[ 'innerBlocks' ] as &$innerBlock ) {
-				$innerBlock = $this->process_acf_block( $innerBlock, $blog );
+				$innerBlock = $this->process_acf_block( $innerBlock, $data, $blog );
 			}
 		}
 
@@ -263,7 +263,12 @@ class Rudr_SWC_ACF {
 			if( 0 !== strpos( $key, '_' ) ) {
 				$field_key = $block[ 'attrs' ][ 'data' ][ '_'.$key ];
 
-				$value = apply_filters( 'rudr_swc_pre_crosspost_acf_block_value', $value, $field_key, $blog );
+				$value = apply_filters(
+					'rudr_swc_pre_crosspost_acf_block_value',
+					$this->process_field_by_type( $value, get_field_object( $field_key, $data[ 'id' ], false ), $data[ 'id' ], $blog ),
+					$field_key,
+					$blog
+				);
 
 				$fields[ $key ] = str_replace(
 					array( "\r" . PHP_EOL, PHP_EOL ),
