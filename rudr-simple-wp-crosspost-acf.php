@@ -5,7 +5,7 @@
  * Description: Provides better compatibility with ACF and ACF PRO.
  * Author: Misha Rudrastyh
  * Author URI: https://rudrastyh.com
- * Version: 1.1
+ * Version: 1.2
  */
 class Rudr_SWC_ACF {
 
@@ -14,6 +14,7 @@ class Rudr_SWC_ACF {
 
 		add_filter( 'rudr_swc_pre_crosspost_post_data', array( $this, 'process_fields' ), 25, 2 );
 		add_filter( 'rudr_swc_pre_crosspost_post_data', array( $this, 'process_acf_blocks' ), 30, 2 );
+		add_filter( 'rudr_swc_pre_crosspost_term_data', array( $this, 'process_fields' ), 30, 3 );
 
 		register_activation_hook( __FILE__, array( $this, 'activate' ) );
 
@@ -33,7 +34,7 @@ class Rudr_SWC_ACF {
 
 	}
 
-	public function process_fields( $data, $blog ) {
+	public function process_fields( $data, $blog, $object_type = 'post' ) {
 
 		// if no meta fields do nothing
 		if( ! isset( $data[ 'meta' ] ) || ! is_array( $data[ 'meta' ] ) ) {
@@ -47,7 +48,8 @@ class Rudr_SWC_ACF {
 		if( empty( $data[ 'id' ] ) ) {
 			return $data;
 		}
-		$object_id = (int) $data[ 'id' ];
+		// either a post ID or a WP_Term object for taxonomy terms
+		$object_id = 'term' === $object_type ? get_term_by( 'id', $data[ 'id' ], $data[ 'taxonomy' ] ) : (int) $data[ 'id' ];
 
 		foreach( $data[ 'meta' ] as $meta_key => $meta_value ) { // ACF doesn't use an array of meta values per key
 
