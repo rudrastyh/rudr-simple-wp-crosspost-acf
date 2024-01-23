@@ -5,15 +5,19 @@
  * Description: Provides better compatibility with ACF and ACF PRO.
  * Author: Misha Rudrastyh
  * Author URI: https://rudrastyh.com
- * Version: 1.2
+ * Version: 1.3
  */
 class Rudr_SWC_ACF {
 
 
 	function __construct() {
 
+		// regular posts and post types (+blocks)
 		add_filter( 'rudr_swc_pre_crosspost_post_data', array( $this, 'process_fields' ), 25, 2 );
 		add_filter( 'rudr_swc_pre_crosspost_post_data', array( $this, 'process_acf_blocks' ), 30, 2 );
+		// woocommerce products
+		add_filter( 'rudr_swc_pre_crosspost_product_data', array( $this, 'process_product_fields' ), 25, 2 );
+		// terms
 		add_filter( 'rudr_swc_pre_crosspost_term_data', array( $this, 'process_fields' ), 30, 3 );
 
 		register_activation_hook( __FILE__, array( $this, 'activate' ) );
@@ -74,6 +78,33 @@ class Rudr_SWC_ACF {
 
 	}
 
+	public function process_product_fields( $product_data, $blog_id ) {
+		// if no meta fields do nothing
+		if( ! isset( $product_data[ 'meta_data' ] ) || ! is_array( $product_data[ 'meta_data' ] ) ) {
+			return $product_data;
+		}
+		// if no ACF
+		if( ! function_exists( 'get_field_object' ) ) {
+			return $product_data;
+		}
+		// product ID is available as a global object $post
+		$object_id = get_the_ID();
+		$blog = Rudr_Simple_WP_Crosspost::get_blog( $blog_id );
+
+		foreach( $product_data[ 'meta_data' ] as &$meta ) {
+
+			$field = get_field_object( $meta[ 'key' ], $object_id, false );
+			if( ! $field ) {
+				continue;
+			}
+
+			$meta[ 'value' ] = $this->process_field_by_type( $meta[ 'value' ], $field, $object_id, $blog );
+
+		}
+
+		return $product_data;
+
+	}
 
 	public function process_field_by_type( $meta_value, $field, $object_id, $blog ) {
 
@@ -95,6 +126,10 @@ class Rudr_SWC_ACF {
 			}
 			case 'flexible_content' : {
 				$meta_value = $this->process_flexible_field( $meta_value, $field, $object_id, $blog );
+				break;
+			}
+			case 'group' : {
+				$meta_value = $this->process_group_field( $meta_value, $field, $object_id, $blog );
 				break;
 			}
 
@@ -173,6 +208,7 @@ class Rudr_SWC_ACF {
 
 			foreach( $repeater as $subfield_key => $subfield_value ) {
 				$subfield = get_field_object( $subfield_key, $object_id, false );
+				$subfield[ 'value' ] = $subfield_value;
 				unset( $repeater[ $subfield_key ] );
 				$repeater[ $subfield[ 'name' ] ] = $this->process_field_by_type( $subfield_value, $subfield, $object_id, $blog );
 			}
@@ -197,6 +233,7 @@ class Rudr_SWC_ACF {
 					continue;
 				}
 				$subfield = get_field_object( $subfield_key, $object_id, false );
+				$subfield[ 'value' ] = $subfield_value;
 				unset( $layout[ $subfield_key ] );
 				$layout[ $subfield[ 'name' ] ] = $this->process_field_by_type( $subfield_value, $subfield, $object_id, $blog );
 			}
@@ -206,6 +243,24 @@ class Rudr_SWC_ACF {
 
 	}
 
+	/**
+	 * Formats Group fields for REST API
+	 */
+	private function process_group_field( $meta_value, $field, $object_id, $blog ){
+
+		$meta_value = $field[ 'value' ];
+
+		foreach( $meta_value as $subfield_key => $subfield_value ) {
+			$subfield = get_field_object( $subfield_key, $object_id, false );
+			$subfield[ 'value' ] = $subfield_value;
+			unset( $meta_value[ $subfield_key ] );
+			$meta_value[ $subfield[ 'name' ] ] = $this->process_field_by_type( $subfield_value, $subfield, $object_id, $blog );
+		}
+
+
+		return $meta_value;
+
+	}
 
 	/**
 	 * ACF Blocks
