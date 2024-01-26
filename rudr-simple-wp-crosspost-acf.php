@@ -5,7 +5,7 @@
  * Description: Provides better compatibility with ACF and ACF PRO.
  * Author: Misha Rudrastyh
  * Author URI: https://rudrastyh.com
- * Version: 1.3
+ * Version: 1.4
  */
 class Rudr_SWC_ACF {
 
@@ -41,7 +41,7 @@ class Rudr_SWC_ACF {
 	public function process_fields( $data, $blog, $object_type = 'post' ) {
 
 		// if no meta fields do nothing
-		if( ! isset( $data[ 'meta' ] ) || ! is_array( $data[ 'meta' ] ) ) {
+		if( ! isset( $data[ 'meta' ] ) || ! $data[ 'meta' ] || ! is_array( $data[ 'meta' ] ) ) {
 			return $data;
 		}
 		// if no ACF
@@ -72,7 +72,8 @@ class Rudr_SWC_ACF {
 			// not necessary to unset repeater subfields like repeater_0_text
 
 		}
-//echo '<pre>';print_r( $data);exit;
+//file_put_contents( __DIR__ . '/log.txt' , print_r( $data, true ) );
+//echo '<pre>';var_dump( $data);exit;
 
 		return $data;
 
@@ -80,7 +81,7 @@ class Rudr_SWC_ACF {
 
 	public function process_product_fields( $product_data, $blog_id ) {
 		// if no meta fields do nothing
-		if( ! isset( $product_data[ 'meta_data' ] ) || ! is_array( $product_data[ 'meta_data' ] ) ) {
+		if( ! isset( $product_data[ 'meta_data' ] ) || ! $product_data[ 'meta_data' ] || ! is_array( $product_data[ 'meta_data' ] ) ) {
 			return $product_data;
 		}
 		// if no ACF
@@ -106,13 +107,13 @@ class Rudr_SWC_ACF {
 
 	}
 
-	public function process_field_by_type( $meta_value, $field, $object_id, $blog ) {
+	public function process_field_by_type( $meta_value, $field, $object_id, $blog, $is_subfield = false ) {
 
 		switch( $field[ 'type' ] ) {
 			case 'image':
 			case 'gallery':
 			case 'file': {
-				$meta_value = $this->process_attachment_field( $meta_value, $field, $blog );
+				$meta_value = $this->process_attachment_field( $meta_value, $field, $blog, $is_subfield );
 				break;
 			}
 			case 'relationship':
@@ -144,7 +145,7 @@ class Rudr_SWC_ACF {
 	 * Replaces attachment IDs with the appropriate IDs on another site
 	 * $meta_value - an attachment ID or an array of IDs
 	 */
-	private function process_attachment_field( $meta_value, $field, $blog ) {
+	private function process_attachment_field( $meta_value, $field, $blog, $is_subfield = false ) {
 		// sometimes we need if
 		$meta_value = maybe_unserialize( $meta_value );
 
@@ -155,18 +156,17 @@ class Rudr_SWC_ACF {
 				if( isset( $crossposted[ 'id' ] ) && $crossposted[ 'id' ] ) {
 					return $crossposted[ 'id' ];
 				}
-				return 0;
+				return false; // will be removed with array_filter()
 			}, $meta_value ) );
 		} else {
 			// image or file field
 			$crossposted = Rudr_Simple_WP_Crosspost::maybe_crosspost_image( $meta_value, $blog );
 			if( isset( $crossposted[ 'id' ] ) && $crossposted[ 'id' ] ) {
 				$meta_value = $crossposted[ 'id' ];
-		 	} else {
-				$meta_value = 0;
 			}
 		}
-		return $meta_value;
+		//return null;
+		return $meta_value ? $meta_value : ( $is_subfield ? 0 : null ); // zero allows to bypass "required" flag on sub-sites
 	}
 
 
@@ -184,16 +184,14 @@ class Rudr_SWC_ACF {
 				if( $crossposted_id = Rudr_Simple_WP_Crosspost::is_crossposted( $post_id, $blog_id ) ) {
 					return $crossposted_id;
 				}
-				return 0;
+				return false; // will be removed with array_filter()
 			}, $meta_value ) );
 		} else {
 			if( $crossposted_id = Rudr_Simple_WP_Crosspost::is_crossposted( $meta_value, $blog_id ) ) {
 				$meta_value = $crossposted_id;
-			} else {
-				$meta_value = 0;
 			}
 		}
-		return $meta_value;
+		return $meta_value ? $meta_value : 0; // zero allows to bypass "required" flag on sub-sites
 	}
 
 
@@ -204,13 +202,18 @@ class Rudr_SWC_ACF {
 
 		$meta_value = $field[ 'value' ];
 
+		// empty strings are our best friends, otherwise ACF REST API don't get it
+		if( ! $meta_value || ! is_array( $meta_value ) ) {
+			return '';
+		}
+
 		foreach( $meta_value as &$repeater ) {
 
 			foreach( $repeater as $subfield_key => $subfield_value ) {
 				$subfield = get_field_object( $subfield_key, $object_id, false );
 				$subfield[ 'value' ] = $subfield_value;
 				unset( $repeater[ $subfield_key ] );
-				$repeater[ $subfield[ 'name' ] ] = $this->process_field_by_type( $subfield_value, $subfield, $object_id, $blog );
+				$repeater[ $subfield[ 'name' ] ] = $this->process_field_by_type( $subfield_value, $subfield, $object_id, $blog, true );
 			}
 
 		}
@@ -226,6 +229,11 @@ class Rudr_SWC_ACF {
 
 		$meta_value = $field[ 'value' ];
 
+		// empty strings are our best friends, otherwise ACF REST API don't get it
+		if( ! $meta_value || ! is_array( $meta_value ) ) {
+			return '';
+		}
+
 		foreach( $meta_value as &$layout ) {
 
 			foreach( $layout as $subfield_key => $subfield_value ) {
@@ -235,7 +243,7 @@ class Rudr_SWC_ACF {
 				$subfield = get_field_object( $subfield_key, $object_id, false );
 				$subfield[ 'value' ] = $subfield_value;
 				unset( $layout[ $subfield_key ] );
-				$layout[ $subfield[ 'name' ] ] = $this->process_field_by_type( $subfield_value, $subfield, $object_id, $blog );
+				$layout[ $subfield[ 'name' ] ] = $this->process_field_by_type( $subfield_value, $subfield, $object_id, $blog, true );
 			}
 
 		}
@@ -254,7 +262,7 @@ class Rudr_SWC_ACF {
 			$subfield = get_field_object( $subfield_key, $object_id, false );
 			$subfield[ 'value' ] = $subfield_value;
 			unset( $meta_value[ $subfield_key ] );
-			$meta_value[ $subfield[ 'name' ] ] = $this->process_field_by_type( $subfield_value, $subfield, $object_id, $blog );
+			$meta_value[ $subfield[ 'name' ] ] = $this->process_field_by_type( $subfield_value, $subfield, $object_id, $blog, true );
 		}
 
 
