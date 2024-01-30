@@ -5,7 +5,7 @@
  * Description: Provides better compatibility with ACF and ACF PRO.
  * Author: Misha Rudrastyh
  * Author URI: https://rudrastyh.com
- * Version: 1.4
+ * Version: 1.5
  */
 class Rudr_SWC_ACF {
 
@@ -99,7 +99,7 @@ class Rudr_SWC_ACF {
 				continue;
 			}
 
-			$meta[ 'value' ] = $this->process_field_by_type( $meta[ 'value' ], $field, $object_id, $blog );
+			$meta[ 'value' ] = $this->process_product_field_by_type( $meta[ 'value' ], $field, $object_id, $blog );
 
 		}
 
@@ -121,6 +121,10 @@ class Rudr_SWC_ACF {
 				$meta_value = $this->process_relationships_field( $meta_value, $field, $blog );
 				break;
 			}
+			case 'taxonomy' : {
+				$meta_value = $meta_value ? $meta_value : null;
+				break;
+			}
 			case 'repeater' : {
 				$meta_value = $this->process_repeater_field( $meta_value, $field, $object_id, $blog );
 				break;
@@ -134,6 +138,31 @@ class Rudr_SWC_ACF {
 				break;
 			}
 
+		}
+
+		return $meta_value;
+
+	}
+
+
+	public function process_product_field_by_type( $meta_value, $field, $object_id, $blog ) {
+
+		switch( $field[ 'type' ] ) {
+			case 'image':
+			case 'gallery':
+			case 'file': {
+				$meta_value = $this->process_attachment_field( $meta_value, $field, $blog );
+				break;
+			}
+			case 'relationship':
+			case 'post_object': {
+				$meta_value = $this->process_relationships_field( $meta_value, $field, $blog );
+				break;
+			}
+			case 'taxonomy' : {
+				$meta_value = $meta_value ? $meta_value : null;
+				break;
+			}
 		}
 
 		return $meta_value;
