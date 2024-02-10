@@ -5,7 +5,7 @@
  * Description: Provides better compatibility with ACF and ACF PRO.
  * Author: Misha Rudrastyh
  * Author URI: https://rudrastyh.com
- * Version: 1.5
+ * Version: 2.0
  */
 class Rudr_SWC_ACF {
 
@@ -109,30 +109,77 @@ class Rudr_SWC_ACF {
 
 	public function process_field_by_type( $meta_value, $field, $object_id, $blog, $is_subfield = false ) {
 
+		// https://www.advancedcustomfields.com/resources/wp-rest-api-integration/
 		switch( $field[ 'type' ] ) {
-			case 'image':
-			case 'gallery':
-			case 'file': {
-				$meta_value = $this->process_attachment_field( $meta_value, $field, $blog, $is_subfield );
+
+			// number, null
+			case 'number' :
+			// string (email), null
+			case 'email' : {
+				// ACF bug: empty fields require null value but it doesn't empty a field via REST API
+				// https://support.advancedcustomfields.com/forums/topic/rest-api-cant-update-null-value-on-nested-field-group/
+				// email validation happens even in subfields and it creates 400 Bad request
+				// numbers in subfields can not be saved as well
+				$meta_value = $meta_value ? $meta_value : null;
 				break;
 			}
+
+			// integer (attachment ID), null
+			case 'image':
+			// number[] (array of attachment IDs), null
+			case 'gallery':
+			// integer (attachment ID), null
+			case 'file': {
+				$meta_value = $this->process_attachment_field( $meta_value, $field, $blog );
+				// ACF bug: empty fields require null value but it doesn't empty a field via REST API
+				// https://support.advancedcustomfields.com/forums/topic/rest-api-cant-update-null-value-on-nested-field-group/
+				// at least we can make it work in repeaters or group fields
+				if( is_null( $meta_value ) && $is_subfield ) {
+					$meta_value = 0;
+				}
+				break;
+			}
+
+			// object, null
+			case 'link' : {
+				// luckily we are able to fool ACF here by providing an empty object instead of null
+				$meta_value = $meta_value ? $meta_value : (object) array( 'title' => '', 'url' => '' );
+				break;
+			}
+
+			// int, array, null
 			case 'relationship':
+			// string, int, array, null
+			case 'page_link':
+			// int, array, null
 			case 'post_object': {
 				$meta_value = $this->process_relationships_field( $meta_value, $field, $blog );
 				break;
 			}
+
+			// string, array, null
 			case 'taxonomy' : {
-				$meta_value = $meta_value ? $meta_value : null;
+				$meta_value = $this->process_taxonomy_relationships_field( $meta_value, $field, $blog );
 				break;
 			}
+
+			// string, array, null
+			case 'user' : {
+				$meta_value = $this->process_user_relationships_field( $meta_value, $field, $blog );
+				break;
+			}
+
+			// array, null
 			case 'repeater' : {
 				$meta_value = $this->process_repeater_field( $meta_value, $field, $object_id, $blog );
 				break;
 			}
+			// array, null
 			case 'flexible_content' : {
 				$meta_value = $this->process_flexible_field( $meta_value, $field, $object_id, $blog );
 				break;
 			}
+			// object,null
 			case 'group' : {
 				$meta_value = $this->process_group_field( $meta_value, $field, $object_id, $blog );
 				break;
@@ -155,12 +202,17 @@ class Rudr_SWC_ACF {
 				break;
 			}
 			case 'relationship':
+			case 'page_link':
 			case 'post_object': {
 				$meta_value = $this->process_relationships_field( $meta_value, $field, $blog );
 				break;
 			}
 			case 'taxonomy' : {
-				$meta_value = $meta_value ? $meta_value : null;
+				$meta_value = $this->process_taxonomy_relationships_field( $meta_value, $field, $blog );
+				break;
+			}
+			case 'user' : {
+				$meta_value = $this->process_user_relationships_field( $meta_value, $field, $blog );
 				break;
 			}
 		}
@@ -195,7 +247,7 @@ class Rudr_SWC_ACF {
 			}
 		}
 		//return null;
-		return $meta_value ? $meta_value : ( $is_subfield ? 0 : null ); // zero allows to bypass "required" flag on sub-sites
+		return $meta_value ? $meta_value : null;
 	}
 
 
@@ -221,6 +273,115 @@ class Rudr_SWC_ACF {
 			}
 		}
 		return $meta_value ? $meta_value : 0; // zero allows to bypass "required" flag on sub-sites
+	}
+
+
+	/**
+	 * Replaces term IDs in taxonomy releationships fields
+	 * $meta_value - a term ID or an array of IDs
+	 */
+	private function process_taxonomy_relationships_field( $meta_value, $field, $blog ) {
+
+		// get taxonomy first
+		$taxonomy = get_taxonomy( $field[ 'taxonomy' ] );
+		if( ! is_object( $taxonomy ) ) {
+			return 0;
+		}
+		// rest base
+		$rest_base = $taxonomy->rest_base ? $taxonomy->rest_base : $taxonomy->name;
+
+		// get an array of term slugs
+		$slugs = array();
+		$term_ids = is_array( $meta_value ) ? $meta_value : array( $meta_value );
+		foreach( $term_ids as $term_id ) {
+			$term = get_term_by( 'id', $term_id, $taxonomy->name );
+			if( ! $term ) {
+				continue;
+			}
+			$slugs[] = $term->slug;
+		}
+		if( ! $slugs ) {
+			return 0;
+		}
+
+		// what we are going to return
+		$meta_value = array();
+
+		// sending request
+		$request = wp_remote_get(
+			add_query_arg(
+				array(
+					'slug' => join( ',', $slugs ),
+					'hide_empty' => 0,
+					'per_page' => 20,
+				),
+				"{$blog[ 'url' ]}/wp-json/wp/v2/{$rest_base}"
+			)
+		);
+		// get results
+		if( 'OK' === wp_remote_retrieve_response_message( $request ) ) {
+			$terms = json_decode( wp_remote_retrieve_body( $request ), true );
+			if( $terms && is_array( $terms ) ) {
+				foreach( $terms as $term ) {
+					if( empty( $term[ 'id' ] ) ) {
+						continue;
+					}
+					$meta_value[] = $term[ 'id' ];
+				}
+			}
+		}
+		return $meta_value ? $meta_value : 0;
+
+	}
+
+
+	/**
+	 * Replaces user IDs in user releationships fields
+	 * $meta_value - a user ID or an array of IDs
+	 */
+	private function process_user_relationships_field( $meta_value, $field, $blog ) {
+
+		// get an array of term slugs
+		$slugs = array();
+		$user_ids = is_array( $meta_value ) ? $meta_value : array( $meta_value );
+		foreach( $user_ids as $user_id ) {
+			$user = get_user_by( 'id', $user_id );
+			if( ! $user ) {
+				continue;
+			}
+			$slugs[] = $user->user_nicename;
+		}
+		if( ! $slugs ) {
+			return 0;
+		}
+
+		// what we are going to return
+		$meta_value = array();
+
+		// sending request
+		$request = wp_remote_get(
+			add_query_arg(
+				array(
+					'slug' => join( ',', $slugs ),
+					'per_page' => 20,
+				),
+				"{$blog[ 'url' ]}/wp-json/wp/v2/users"
+			)
+		);
+		// get results
+		if( 'OK' === wp_remote_retrieve_response_message( $request ) ) {
+			$users = json_decode( wp_remote_retrieve_body( $request ), true );
+			if( $users && is_array( $users ) ) {
+				foreach( $users as $user ) {
+					if( empty( $user[ 'id' ] ) ) {
+						continue;
+					}
+					$meta_value[] = $user[ 'id' ];
+				}
+			}
+		}
+		return $meta_value ? $meta_value : 0;
+
 	}
 
 
