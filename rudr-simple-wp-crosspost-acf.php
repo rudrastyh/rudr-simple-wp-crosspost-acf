@@ -5,7 +5,7 @@
  * Description: Provides better compatibility with ACF and ACF PRO.
  * Author: Misha Rudrastyh
  * Author URI: https://rudrastyh.com
- * Version: 2.0
+ * Version: 2.1
  */
 class Rudr_SWC_ACF {
 
@@ -352,7 +352,7 @@ class Rudr_SWC_ACF {
 			$slugs[] = $user->user_nicename;
 		}
 		if( ! $slugs ) {
-			return 0;
+			return array();
 		}
 
 		// what we are going to return
@@ -380,7 +380,7 @@ class Rudr_SWC_ACF {
 				}
 			}
 		}
-		return $meta_value ? $meta_value : 0;
+		return $meta_value;
 
 	}
 
