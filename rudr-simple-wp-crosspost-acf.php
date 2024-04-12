@@ -5,7 +5,7 @@
  * Description: Provides better compatibility with ACF and ACF PRO.
  * Author: Misha Rudrastyh
  * Author URI: https://rudrastyh.com
- * Version: 2.2
+ * Version: 2.3
  */
 class Rudr_SWC_ACF {
 
@@ -79,7 +79,7 @@ class Rudr_SWC_ACF {
 
 	}
 
-	public function process_product_fields( $product_data, $blog_id ) {
+	public function process_product_fields( $product_data, $blog ) {
 		// if no meta fields do nothing
 		if( ! isset( $product_data[ 'meta_data' ] ) || ! $product_data[ 'meta_data' ] || ! is_array( $product_data[ 'meta_data' ] ) ) {
 			return $product_data;
@@ -90,7 +90,7 @@ class Rudr_SWC_ACF {
 		}
 		// product ID is available as a global object $post
 		$object_id = get_the_ID();
-		$blog = Rudr_Simple_WP_Crosspost::get_blog( $blog_id );
+		//$blog = Rudr_Simple_WP_Crosspost::get_blog( $blog_id );
 
 		foreach( $product_data[ 'meta_data' ] as &$meta ) {
 
