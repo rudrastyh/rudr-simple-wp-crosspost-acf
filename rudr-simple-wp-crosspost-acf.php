@@ -5,7 +5,7 @@
  * Description: Provides better compatibility with ACF and ACF PRO.
  * Author: Misha Rudrastyh
  * Author URI: https://rudrastyh.com
- * Version: 2.3
+ * Version: 2.4
  */
 class Rudr_SWC_ACF {
 
@@ -260,19 +260,24 @@ class Rudr_SWC_ACF {
 		$blog_id = Rudr_Simple_WP_Crosspost::get_blog_id( $blog );
 
 		$meta_value = maybe_unserialize( $meta_value );
-		if( is_array( $meta_value ) ) {
-			$meta_value = array_filter( array_map( function( $post_id ) use ( $blog_id ) {
-				if( $crossposted_id = Rudr_Simple_WP_Crosspost::is_crossposted( $post_id, $blog_id ) ) {
-					return $crossposted_id;
+		$ids = is_array( $meta_value ) ? $meta_value : array( $meta_value );
+
+		$crossposted_ids = array();
+		foreach( $ids as $id ) {
+			$post_type = get_post_type( $id );
+			if( 'product' === $post_type && function_exists( 'wc_get_product' ) ) {
+				$product = wc_get_product( $id );
+				// no need to check connection type, this method does that
+				if( $product && ( $new_id = Rudr_Simple_Woo_Crosspost::is_crossposted_product( $product, $blog ) ) ) {
+					$crossposted_ids[] = $new_id;
 				}
-				return false; // will be removed with array_filter()
-			}, $meta_value ) );
-		} else {
-			if( $crossposted_id = Rudr_Simple_WP_Crosspost::is_crossposted( $meta_value, $blog_id ) ) {
-				$meta_value = $crossposted_id;
+			} else {
+				if( $new_id = Rudr_Simple_WP_Crosspost::is_crossposted( $post_id, $blog_id ) ) {
+					$crossposted_ids[] = $new_id;
+				}
 			}
 		}
-		return $meta_value ? $meta_value : 0; // zero allows to bypass "required" flag on sub-sites
+		return $crossposted_ids ? $crossposted_ids : 0; // zero allows to bypass "required" flag on sub-sites
 	}
 
 
