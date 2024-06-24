@@ -5,7 +5,7 @@
  * Description: Provides better compatibility with ACF and ACF PRO.
  * Author: Misha Rudrastyh
  * Author URI: https://rudrastyh.com
- * Version: 2.4
+ * Version: 2.5
  */
 class Rudr_SWC_ACF {
 
@@ -272,7 +272,7 @@ class Rudr_SWC_ACF {
 					$crossposted_ids[] = $new_id;
 				}
 			} else {
-				if( $new_id = Rudr_Simple_WP_Crosspost::is_crossposted( $post_id, $blog_id ) ) {
+				if( $new_id = Rudr_Simple_WP_Crosspost::is_crossposted( $id, $blog_id ) ) {
 					$crossposted_ids[] = $new_id;
 				}
 			}
