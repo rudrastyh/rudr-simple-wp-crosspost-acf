@@ -5,7 +5,7 @@
  * Description: Provides better compatibility with ACF and ACF PRO.
  * Author: Misha Rudrastyh
  * Author URI: https://rudrastyh.com
- * Version: 2.5
+ * Version: 2.7
  */
 class Rudr_SWC_ACF {
 
@@ -13,10 +13,10 @@ class Rudr_SWC_ACF {
 	function __construct() {
 
 		// regular posts and post types (+blocks)
-		add_filter( 'rudr_swc_pre_crosspost_post_data', array( $this, 'process_fields' ), 25, 2 );
-		add_filter( 'rudr_swc_pre_crosspost_post_data', array( $this, 'process_acf_blocks' ), 30, 2 );
+		add_filter( 'rudr_swc_pre_crosspost_post_data', array( $this, 'process_fields' ), 25, 3 );
+		add_filter( 'rudr_swc_pre_crosspost_post_data', array( $this, 'process_acf_blocks' ), 30, 3 );
 		// woocommerce products
-		add_filter( 'rudr_swc_pre_crosspost_product_data', array( $this, 'process_product_fields' ), 25, 2 );
+		add_filter( 'rudr_swc_pre_crosspost_product_data', array( $this, 'process_product_fields' ), 25, 3 );
 		// terms
 		add_filter( 'rudr_swc_pre_crosspost_term_data', array( $this, 'process_fields' ), 30, 3 );
 
@@ -38,26 +38,29 @@ class Rudr_SWC_ACF {
 
 	}
 
-	public function process_fields( $data, $blog, $object_type = 'post' ) {
+	public function process_fields( $data, $blog, $object ) {
 
 		// if no meta fields do nothing
 		if( ! isset( $data[ 'meta' ] ) || ! $data[ 'meta' ] || ! is_array( $data[ 'meta' ] ) ) {
 			return $data;
 		}
 		// if no ACF
-		if( ! function_exists( 'get_field_object' ) ) {
-			return $data;
-		}
-		// just in case
-		if( empty( $data[ 'id' ] ) ) {
+		if( ! function_exists( 'acf_get_field' ) ) {
 			return $data;
 		}
 		// either a post ID or a WP_Term object for taxonomy terms
-		$object_id = 'term' === $object_type ? get_term_by( 'id', $data[ 'id' ], $data[ 'taxonomy' ] ) : (int) $data[ 'id' ];
+		$object_id = 'rudr_swc_pre_crosspost_term_data' === current_filter() ? $object->term_id : $object->ID;
 
 		foreach( $data[ 'meta' ] as $meta_key => $meta_value ) { // ACF doesn't use an array of meta values per key
 
-			$field = get_field_object( $meta_key, $object_id, false );
+			if( 'rudr_swc_pre_crosspost_term_data' == current_filter() ) {
+				$field_key = get_term_meta( $object_id, "_{$meta_key}", true );
+			} else {
+				$field_key = get_post_meta( $object_id, "_{$meta_key}", true );
+			}
+
+			$field = acf_get_field( $field_key );
+			//$field = get_field_object( $meta_key, $object_id, false );
 			// if it is not really an ACF field (returns false)
 			if( ! $field ) {
 				continue;
@@ -79,7 +82,7 @@ class Rudr_SWC_ACF {
 
 	}
 
-	public function process_product_fields( $product_data, $blog ) {
+	public function process_product_fields( $product_data, $blog, $product ) {
 		// if no meta fields do nothing
 		if( ! isset( $product_data[ 'meta_data' ] ) || ! $product_data[ 'meta_data' ] || ! is_array( $product_data[ 'meta_data' ] ) ) {
 			return $product_data;
@@ -88,8 +91,8 @@ class Rudr_SWC_ACF {
 		if( ! function_exists( 'get_field_object' ) ) {
 			return $product_data;
 		}
-		// product ID is available as a global object $post
-		$object_id = get_the_ID();
+		// product ID is not available as a global object $post
+		$object_id = $product->get_id();
 		//$blog = Rudr_Simple_WP_Crosspost::get_blog( $blog_id );
 
 		foreach( $product_data[ 'meta_data' ] as &$meta ) {
