@@ -5,7 +5,7 @@
  * Description: Provides better compatibility with ACF and ACF PRO.
  * Author: Misha Rudrastyh
  * Author URI: https://rudrastyh.com
- * Version: 2.7
+ * Version: 2.8
  */
 class Rudr_SWC_ACF {
 
@@ -543,17 +543,22 @@ class Rudr_SWC_ACF {
 			if( 0 !== strpos( $key, '_' ) ) {
 				$field_key = $block[ 'attrs' ][ 'data' ][ '_'.$key ];
 
-				$value = apply_filters(
+				$fields[ $key ] = apply_filters(
 					'rudr_swc_pre_crosspost_acf_block_value',
 					$this->process_acf_block_by_type( $value, acf_get_field( $field_key ), $blog ),
 					$field_key,
 					$blog
 				);
+				$fields[ '_'.$key ] = $field_key;
+
+				if( is_array( $fields[ $key ] ) ) {
+					continue;
+				}
 
 				$fields[ $key ] = str_replace(
 					array( "\r" . PHP_EOL, PHP_EOL ),
 					'\r\n',
-					$value
+					$fields[ $key ]
 					//addslashes( wp_kses( stripslashes( $value ), 'post' ) )
 				);
 
@@ -635,7 +640,6 @@ class Rudr_SWC_ACF {
 					$fields[ $key ]
 				);*/
 
-				$fields[ '_'.$key ] = $field_key;
 			}
 		}
 
