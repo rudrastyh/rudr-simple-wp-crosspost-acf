@@ -2,13 +2,15 @@
 /**
  * Plugin Name: Simple WP Crossposting – ACF
  * Plugin URL: https://rudrastyh.com/support/acf-compatibility
- * Description: Provides better compatibility with ACF and ACF PRO.
+ * Description: Provides better compatibility with Advanced Custom Fields (ACF), Secure Custom Fields (SCF), and ACF PRO.
  * Author: Misha Rudrastyh
  * Author URI: https://rudrastyh.com
- * Version: 2.8
+ * Version: 3.0
  */
 class Rudr_SWC_ACF {
 
+	public $meta_data;
+	public $field_key_parts;
 
 	function __construct() {
 
@@ -50,6 +52,8 @@ class Rudr_SWC_ACF {
 		}
 		// either a post ID or a WP_Term object for taxonomy terms
 		$object_id = 'rudr_swc_pre_crosspost_term_data' === current_filter() ? $object->term_id : $object->ID;
+		// for field processing functions
+		$this->meta_data = $data[ 'meta' ];
 
 		foreach( $data[ 'meta' ] as $meta_key => $meta_value ) { // ACF doesn't use an array of meta values per key
 
@@ -66,13 +70,21 @@ class Rudr_SWC_ACF {
 				continue;
 			}
 
-			$meta_value = $this->process_field_by_type( $meta_value, $field, $object_id, $blog );
-
-			// re-organize the fields
-			$data[ 'acf' ][ $meta_key ] = $meta_value;
 			unset( $data[ 'meta' ][ $meta_key ] );
 			unset( $data[ 'meta' ][ "_{$meta_key}" ] );
 			// not necessary to unset repeater subfields like repeater_0_text
+
+			// do nothing if this is kind of a system field
+			if( 0 === strpos( $meta_key, '_' ) ) {
+				continue;
+			}
+
+			// we will need it for complex and group fields
+			$this->field_key_parts = array();
+
+			$meta_value = $this->process_field_by_type( $meta_value, $field, $object_id, $blog );
+			// re-organize the fields
+			$data[ 'acf' ][ $meta_key ] = $meta_value;
 
 		}
 //file_put_contents( __DIR__ . '/log.txt' , print_r( $data, true ) );
@@ -398,24 +410,25 @@ class Rudr_SWC_ACF {
 	 */
 	private function process_repeater_field( $meta_value, $field, $object_id, $blog ){
 
-		$meta_value = $field[ 'value' ];
+		$meta_value = array();
 
-		// empty strings are our best friends, otherwise ACF REST API don't get it
-		if( ! $meta_value || ! is_array( $meta_value ) ) {
-			return '';
-		}
+		$this->field_key_parts[] = $field[ 'name' ];
+		$repeater_key = join( '_', $this->field_key_parts );
+		$count = isset( $this->meta_data[ $repeater_key ] ) ? $this->meta_data[ $repeater_key ] : 0;
 
-		foreach( $meta_value as &$repeater ) {
+		for( $i = 0; $i < $count; $i++ ) {
+			if( $field[ 'sub_fields' ] && is_array( $field[ 'sub_fields' ] ) ) {
+				foreach( $field[ 'sub_fields' ] as $subfield ) {
+					// we can get the subfield value from the global meta data
+					$key = "{$repeater_key}_{$i}_{$subfield[ 'name' ]}";
+					$subfield_value = isset( $this->meta_data[ $key ] ) ? $this->meta_data[ $key ] : '';
 
-			foreach( $repeater as $subfield_key => $subfield_value ) {
-				$subfield = get_field_object( $subfield_key, $object_id, false );
-				$subfield[ 'value' ] = $subfield_value;
-				unset( $repeater[ $subfield_key ] );
-				$repeater[ $subfield[ 'name' ] ] = $this->process_field_by_type( $subfield_value, $subfield, $object_id, $blog, true );
+					$meta_value[ $i ][ $subfield[ 'name' ] ] = $this->process_field_by_type( $subfield_value, $subfield, $object_id, $blog, true );
+				}
 			}
-
 		}
-		return $meta_value;
+
+		return $meta_value ? $meta_value : null;
 
 	}
 
@@ -425,27 +438,27 @@ class Rudr_SWC_ACF {
 	 */
 	private function process_flexible_field( $meta_value, $field, $object_id, $blog ) {
 
-		$meta_value = $field[ 'value' ];
+		$meta_value = array();
 
-		// empty strings are our best friends, otherwise ACF REST API don't get it
-		if( ! $meta_value || ! is_array( $meta_value ) ) {
-			return '';
-		}
+		$this->field_key_parts[] = $field[ 'name' ];
+		$flex_key = join( '_', $this->field_key_parts );
+		$count = ! empty( $this->meta_data[ $flex_key ] ) ? count( $this->meta_data[ $flex_key ] ) : 0;
+//echo '<pre>';print_r($field);
+		for( $i = 0; $i < $count; $i++ ) {
+			foreach( $field[ 'layouts' ] as $layout_key => $layout ) {
+				$meta_value[ $i ][ 'acf_fc_layout' ] = $layout[ 'name' ];
+				if( $layout[ 'sub_fields' ] && is_array( $layout[ 'sub_fields' ] ) ) {
+					foreach( $layout[ 'sub_fields' ] as $subfield ) {
+						// we can get the subfield value from the global meta data
+						$key = "{$flex_key}_{$i}_{$subfield[ 'name' ]}";
+						$subfield_value = isset( $this->meta_data[ $key ] ) ? $this->meta_data[ $key ] : '';
 
-		foreach( $meta_value as &$layout ) {
-
-			foreach( $layout as $subfield_key => $subfield_value ) {
-				if( 'acf_fc_layout' === $subfield_key ) {
-					continue;
+						$meta_value[ $i ][ $subfield[ 'name' ] ] = $this->process_field_by_type( $subfield_value, $subfield, $object_id, $blog, true );
+					}
 				}
-				$subfield = get_field_object( $subfield_key, $object_id, false );
-				$subfield[ 'value' ] = $subfield_value;
-				unset( $layout[ $subfield_key ] );
-				$layout[ $subfield[ 'name' ] ] = $this->process_field_by_type( $subfield_value, $subfield, $object_id, $blog, true );
 			}
-
 		}
-		return $meta_value;
+		return $meta_value ? $meta_value : null;
 
 	}
 
@@ -454,13 +467,19 @@ class Rudr_SWC_ACF {
 	 */
 	private function process_group_field( $meta_value, $field, $object_id, $blog ){
 
-		$meta_value = $field[ 'value' ];
+		$this->field_key_parts[] = $field[ 'name' ];
 
-		foreach( $meta_value as $subfield_key => $subfield_value ) {
-			$subfield = get_field_object( $subfield_key, $object_id, false );
-			$subfield[ 'value' ] = $subfield_value;
-			unset( $meta_value[ $subfield_key ] );
-			$meta_value[ $subfield[ 'name' ] ] = $this->process_field_by_type( $subfield_value, $subfield, $object_id, $blog, true );
+		// meta value for group fields doesn't matter but we need to return a structured meta value at the same time
+		$meta_value = array();
+
+		if( $field[ 'sub_fields' ] && is_array( $field[ 'sub_fields' ] ) ) {
+			foreach( $field[ 'sub_fields' ] as $subfield ) {
+				// we can get the subfield value from the global meta data
+				$key = join( '_', $this->field_key_parts ) . '_' . $subfield[ 'name' ];
+				$subfield_value = isset( $this->meta_data[ $key ] ) ? $this->meta_data[ $key ] : '';
+
+				$meta_value[ $subfield[ 'name' ] ] = $this->process_field_by_type( $subfield_value, $subfield, $object_id, $blog, true );
+			}
 		}
 
 
