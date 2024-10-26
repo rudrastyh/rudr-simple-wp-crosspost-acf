@@ -5,7 +5,7 @@
  * Description: Provides better compatibility with Advanced Custom Fields (ACF), Secure Custom Fields (SCF), and ACF PRO.
  * Author: Misha Rudrastyh
  * Author URI: https://rudrastyh.com
- * Version: 3.0
+ * Version: 3.1
  */
 class Rudr_SWC_ACF {
 
@@ -63,8 +63,8 @@ class Rudr_SWC_ACF {
 				$field_key = get_post_meta( $object_id, "_{$meta_key}", true );
 			}
 
-			$field = acf_get_field( $field_key );
-			//$field = get_field_object( $meta_key, $object_id, false );
+			//$field = acf_get_field( $field_key );
+			$field = get_field_object( $field_key );
 			// if it is not really an ACF field (returns false)
 			if( ! $field ) {
 				continue;
