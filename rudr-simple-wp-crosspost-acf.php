@@ -5,7 +5,7 @@
  * Description: Provides better compatibility with Advanced Custom Fields (ACF), Secure Custom Fields (SCF), and ACF PRO.
  * Author: Misha Rudrastyh
  * Author URI: https://rudrastyh.com
- * Version: 3.2
+ * Version: 3.3
  */
 class Rudr_SWC_ACF {
 
@@ -446,9 +446,15 @@ class Rudr_SWC_ACF {
 //echo '<pre>';print_r($field);
 		for( $i = 0; $i < $count; $i++ ) {
 			foreach( $field[ 'layouts' ] as $layout_key => $layout ) {
+				if( empty( $field[ 'value' ][ $i ][ 'acf_fc_layout' ] ) || $field[ 'value' ][ $i ][ 'acf_fc_layout' ] !== $layout[ 'name' ] ) {
+					continue;
+				}
 				$meta_value[ $i ][ 'acf_fc_layout' ] = $layout[ 'name' ];
 				if( $layout[ 'sub_fields' ] && is_array( $layout[ 'sub_fields' ] ) ) {
 					foreach( $layout[ 'sub_fields' ] as $subfield ) {
+						if( empty( $subfield[ 'name' ] ) ) {
+							continue;
+						}
 						// we can get the subfield value from the global meta data
 						$key = "{$flex_key}_{$i}_{$subfield[ 'name' ]}";
 						$subfield_value = isset( $this->meta_data[ $key ] ) ? $this->meta_data[ $key ] : '';
