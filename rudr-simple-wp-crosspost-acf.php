@@ -5,7 +5,7 @@
  * Description: Provides better compatibility with Advanced Custom Fields (ACF), Secure Custom Fields (SCF), and ACF PRO.
  * Author: Misha Rudrastyh
  * Author URI: https://rudrastyh.com
- * Version: 3.3
+ * Version: 3.4
  */
 class Rudr_SWC_ACF {
 
@@ -129,6 +129,8 @@ class Rudr_SWC_ACF {
 
 			// number, null
 			case 'number' :
+			// string, null
+			case 'select' :
 			// string (email), null
 			case 'email' : {
 				// ACF bug: empty fields require null value but it doesn't empty a field via REST API
