@@ -5,7 +5,7 @@
  * Description: Provides better compatibility with Advanced Custom Fields (ACF), Secure Custom Fields (SCF), and ACF PRO.
  * Author: Misha Rudrastyh
  * Author URI: https://rudrastyh.com
- * Version: 3.4
+ * Version: 3.5
  */
 class Rudr_SWC_ACF {
 
@@ -502,6 +502,11 @@ class Rudr_SWC_ACF {
 
 		// no blocks, especially no acf ones
 		if( ! has_blocks( $data[ 'content' ] ) ) {
+			return $data;
+		}
+
+		// not ACF PRO
+		if( ! function_exists( 'acf_has_block_type' ) ) {
 			return $data;
 		}
 
