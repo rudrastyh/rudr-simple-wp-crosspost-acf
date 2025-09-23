@@ -5,7 +5,7 @@
  * Description: Provides better compatibility with Advanced Custom Fields (ACF), Secure Custom Fields (SCF), and ACF PRO.
  * Author: Misha Rudrastyh
  * Author URI: https://rudrastyh.com
- * Version: 3.5
+ * Version: 3.7
  */
 class Rudr_SWC_ACF {
 
@@ -414,18 +414,29 @@ class Rudr_SWC_ACF {
 
 		$meta_value = array();
 
-		$this->field_key_parts[] = $field[ 'name' ];
+		$field_key_parts = $this->field_key_parts;
+		// add the field name right away
+		$field_key_parts[] = $field[ 'name' ];
+		$this->field_key_parts = $field_key_parts;
+
 		$repeater_key = join( '_', $this->field_key_parts );
-		$count = isset( $this->meta_data[ $repeater_key ] ) ? $this->meta_data[ $repeater_key ] : 0;
+		$count = isset( $this->meta_data[ $repeater_key ] ) ? absint( $this->meta_data[ $repeater_key ] ) : 0;
 
 		for( $i = 0; $i < $count; $i++ ) {
 			if( $field[ 'sub_fields' ] && is_array( $field[ 'sub_fields' ] ) ) {
 				foreach( $field[ 'sub_fields' ] as $subfield ) {
+					// add an iteration to field parts as well
+					$field_key_parts_without_iteration = $this->field_key_parts;
+					$field_key_parts = $this->field_key_parts;
+					$field_key_parts[] = $i;
+					$this->field_key_parts = $field_key_parts;
 					// we can get the subfield value from the global meta data
 					$key = "{$repeater_key}_{$i}_{$subfield[ 'name' ]}";
 					$subfield_value = isset( $this->meta_data[ $key ] ) ? $this->meta_data[ $key ] : '';
 
 					$meta_value[ $i ][ $subfield[ 'name' ] ] = $this->process_field_by_type( $subfield_value, $subfield, $object_id, $blog, true );
+					// reset the iteration
+					$this->field_key_parts = $field_key_parts_without_iteration;
 				}
 			}
 		}
@@ -442,7 +453,11 @@ class Rudr_SWC_ACF {
 
 		$meta_value = array();
 
-		$this->field_key_parts[] = $field[ 'name' ];
+		$field_key_parts = $this->field_key_parts;
+		// add the field name right away
+		$field_key_parts[] = $field[ 'name' ];
+		$this->field_key_parts = $field_key_parts;
+
 		$flex_key = join( '_', $this->field_key_parts );
 		$count = ! empty( $this->meta_data[ $flex_key ] ) ? count( $this->meta_data[ $flex_key ] ) : 0;
 //echo '<pre>';print_r($field);
@@ -457,11 +472,19 @@ class Rudr_SWC_ACF {
 						if( empty( $subfield[ 'name' ] ) ) {
 							continue;
 						}
+						// add an iteration to field parts as well
+						$field_key_parts_without_iteration = $this->field_key_parts;
+						$field_key_parts = $this->field_key_parts;
+						$field_key_parts[] = $i;
+						$this->field_key_parts = $field_key_parts;
 						// we can get the subfield value from the global meta data
 						$key = "{$flex_key}_{$i}_{$subfield[ 'name' ]}";
 						$subfield_value = isset( $this->meta_data[ $key ] ) ? $this->meta_data[ $key ] : '';
 
 						$meta_value[ $i ][ $subfield[ 'name' ] ] = $this->process_field_by_type( $subfield_value, $subfield, $object_id, $blog, true );
+
+						// reset the iteration
+						$this->field_key_parts = $field_key_parts_without_iteration;
 					}
 				}
 			}
