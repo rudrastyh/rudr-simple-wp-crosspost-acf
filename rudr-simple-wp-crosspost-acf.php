@@ -5,7 +5,7 @@
  * Description: Provides better compatibility with Advanced Custom Fields (ACF), Secure Custom Fields (SCF), and ACF PRO.
  * Author: Misha Rudrastyh
  * Author URI: https://rudrastyh.com
- * Version: 3.7
+ * Version: 3.8
  */
 class Rudr_SWC_ACF {
 
@@ -128,7 +128,19 @@ class Rudr_SWC_ACF {
 		switch( $field[ 'type' ] ) {
 
 			// number, null
-			case 'number' :
+			case 'number' : {
+				if( empty( $meta_value ) ) {
+					// can be string(0) "", string(1) "0" or not set at all
+					$meta_value = isset( $meta_value ) && '' !== $meta_value ? 0 : null;
+				}
+				// ACF bug: empty fields require null value but it doesn't empty a field via REST API
+				// https://support.advancedcustomfields.com/forums/topic/rest-api-cant-update-null-value-on-nested-field-group/
+				// at least we can make it work in repeaters or group fields
+				if( is_null( $meta_value ) && $is_subfield ) {
+					$meta_value = 0;
+				}
+				break;
+			}
 			// string, null
 			case 'select' :
 			// string (email), null
@@ -252,7 +264,7 @@ class Rudr_SWC_ACF {
 			$meta_value = array_filter( array_map( function( $attachment_id ) use ( $blog ) {
 				$crossposted = Rudr_Simple_WP_Crosspost::maybe_crosspost_image( $attachment_id, $blog );
 				if( isset( $crossposted[ 'id' ] ) && $crossposted[ 'id' ] ) {
-					return $crossposted[ 'id' ];
+					return (int) $crossposted[ 'id' ];
 				}
 				return false; // will be removed with array_filter()
 			}, $meta_value ) );
@@ -260,7 +272,7 @@ class Rudr_SWC_ACF {
 			// image or file field
 			$crossposted = Rudr_Simple_WP_Crosspost::maybe_crosspost_image( $meta_value, $blog );
 			if( isset( $crossposted[ 'id' ] ) && $crossposted[ 'id' ] ) {
-				$meta_value = $crossposted[ 'id' ];
+				$meta_value = (int) $crossposted[ 'id' ];
 			}
 		}
 		//return null;
@@ -286,15 +298,15 @@ class Rudr_SWC_ACF {
 				$product = wc_get_product( $id );
 				// no need to check connection type, this method does that
 				if( $product && ( $new_id = Rudr_Simple_Woo_Crosspost::is_crossposted_product( $product, $blog ) ) ) {
-					$crossposted_ids[] = $new_id;
+					$crossposted_ids[] = (int) $new_id;
 				}
 			} else {
 				if( $new_id = Rudr_Simple_WP_Crosspost::is_crossposted( $id, $blog_id ) ) {
-					$crossposted_ids[] = $new_id;
+					$crossposted_ids[] = (int) $new_id;
 				}
 			}
 		}
-		return $crossposted_ids ? $crossposted_ids : 0; // zero allows to bypass "required" flag on sub-sites
+		return $crossposted_ids ? $crossposted_ids : null; // zero allows to bypass "required" flag on sub-sites
 	}
 
 
@@ -348,7 +360,7 @@ class Rudr_SWC_ACF {
 					if( empty( $term[ 'id' ] ) ) {
 						continue;
 					}
-					$meta_value[] = $term[ 'id' ];
+					$meta_value[] = (int) $term[ 'id' ];
 				}
 			}
 		}
@@ -398,11 +410,11 @@ class Rudr_SWC_ACF {
 					if( empty( $user[ 'id' ] ) ) {
 						continue;
 					}
-					$meta_value[] = $user[ 'id' ];
+					$meta_value[] = (int) $user[ 'id' ];
 				}
 			}
 		}
-		return $meta_value;
+		return $meta_value ? $meta_value : null;
 
 	}
 
@@ -617,7 +629,7 @@ class Rudr_SWC_ACF {
 					//addslashes( wp_kses( stripslashes( $value ), 'post' ) )
 				);
 
-				preg_match_all( "/\u([0-9a-f]{3,4})/i", json_encode( strip_tags( $fields[ $key ] ) ), $matches );
+				preg_match_all( "/\\\\u([0-9a-f]{3,4})/i", json_encode( strip_tags( $fields[ $key ] ) ), $matches );
 
 				$notencoded = array(
 					'<',
